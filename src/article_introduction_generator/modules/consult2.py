@@ -136,19 +136,20 @@ def generate_llm_relatedworks_commands(data):
     references = related_work.get("references", {})
     synthesis = related_work.get("human_curated_synthesis", {})
 
-    role_groups = [
-        ("foundational", "Foundational work"),
-        ("early_state_of_art", "Early state-of-the-art work"),
-        ("recent_advances", "Recent advances"),
-    ]
+    role_groups = {
+        str(reference.get("introduction_paragraph_role", "")).strip()
+        for reference in references.values()
+        if str(reference.get("introduction_paragraph_role", "")).strip()
+    }
     commands = []
     titles = []
     included_keys = set()
 
-    for role_value, role_label in role_groups:
+    for role_value in sorted(role_groups, key=str.casefold):
+        role_label = role_value.replace("_", " ").strip().title()
         matching = [
             (key, ref) for key, ref in references.items()
-            if str(ref.get("introduction_paragraph_role", "")).strip().casefold() == role_value
+            if str(ref.get("introduction_paragraph_role", "")).strip() == role_value
         ]
         if not matching:
             continue
