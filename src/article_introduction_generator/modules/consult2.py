@@ -9,6 +9,9 @@ You are an expert scientific writer specialized in Q1 Computer Science journals
 
 Your task is to generate only 1 next paragraph of a research paper.
 
+"""
+
+USER_PROMPT_2 = """
 Strict rules:
 * Use only supplied information. Do not invent facts, results, methods, or citations. 
 * The tone must match a top-tier Q1 journal: formal, precise, and concise.
@@ -17,8 +20,8 @@ Strict rules:
 * Do not use exactly the same text sent in JSON, try to use your own words to avoid plagiarism problems.
 * Avoid writing texts with redundant information.
 * Generate only the text, in English, as LaTeX-ready academic prose.
+* Generate the text prioritizing clarity, trying to keep it as short as possible.
 """
-
 
 
 def _format_prompt_data(fields):

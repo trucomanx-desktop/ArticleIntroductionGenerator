@@ -27,7 +27,7 @@ You must write as a human researcher, not as an assistant.
 
 """
 
-USER_PROMPT = """
+USER_PROMPT_1 = """
 Using the JSON below, write the complete INTRODUCTION section of the paper.
 
 Structural requirements:
@@ -65,7 +65,7 @@ def consultation_in_depth(system_prompt, system_data, json_data):
         indent=2              # deixa bonito e legível
     )
     
-    msg = USER_PROMPT + "```json\n" + json_data_string + "\n```"
+    msg = USER_PROMPT_1 + "```json\n" + json_data_string + "\n```"
     
     OUT=consult_with_deepchat(  system_data["base_url"],
                                 system_data["api_key"],
@@ -85,6 +85,6 @@ def consultation_in_text(system_prompt, json_data):
     msg  = "System PROMPT:\n" 
     msg += system_prompt + "\n"
     msg += "User PROMPT:\n" 
-    msg += USER_PROMPT + "```json\n" + json_data_string + "\n```"
+    msg += USER_PROMPT_1 + "```json\n" + json_data_string + "\n```"
     
     return msg

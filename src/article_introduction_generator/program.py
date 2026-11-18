@@ -21,7 +21,7 @@ import article_introduction_generator.modules.configure as configure
 from   article_introduction_generator.modules.resources import resource_path
 from   article_introduction_generator.modules.wabout    import show_about_window
 from   article_introduction_generator.desktop           import create_desktop_file, create_desktop_directory, create_desktop_menu
-from   article_introduction_generator.modules.consult2  import consultation_in_depth2, consultation_in_text2, SYSTEM_PROMPT_2
+from   article_introduction_generator.modules.consult2  import consultation_in_depth2, consultation_in_text2, SYSTEM_PROMPT_2, USER_PROMPT_2
 
 # ---------- Path to config file ----------
 CONFIG_PATH = os.path.join( os.path.expanduser("~"),
@@ -58,6 +58,8 @@ DEFAULT_CONTENT={
     "tab_related_work_tooltip": "Related works and literature review",
     "tab_writing_guidelines": "5. LLM writing Guidelines",
     "tab_writing_guidelines_tooltip": "Writing rules and formatting guidelines in LLM introduction generation",
+    "system_prompt_label": "System prompt",
+    "system_prompt_tooltip": "Instructions sent to the LLM for every generated paragraph.",
     "profile_title": "Title",
     "profile_title_tooltip": "Full paper title.",
     "profile_domain": "Domain",
@@ -134,12 +136,13 @@ DEFAULT_CONTENT={
     "list_editor_remove_tooltip": "Remove an element to the list",
     "window_width": 1024,
     "window_height": 800,
-    "system_prompt": SYSTEM_PROMPT_2
+    "system_prompt": SYSTEM_PROMPT_2,
+    "user_prompt": USER_PROMPT_2
 }
 
 configure.verify_default_config(CONFIG_PATH,default_content=DEFAULT_CONTENT)
 
-CONFIG=configure.load_config(CONFIG_PATH)
+CONFIG=configure.load_config(CONFIG_PATH, default_content=DEFAULT_CONTENT)
 
 # ---------- Path to config LLM file ----------
 CONFIG_LLM_PATH = os.path.join( os.path.expanduser("~"),
@@ -171,7 +174,8 @@ class ConsultationWorker(QObject):
 
     def run(self):
         try:
-            result = consultation_in_depth2(SYSTEM_PROMPT_2, self.config, self.data)
+            system_prompt = self.data.get("system_prompt", CONFIG["system_prompt"])
+            result = consultation_in_depth2(system_prompt, self.config, self.data)
             self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))
@@ -812,8 +816,16 @@ class JsonIntroductionEditor(QMainWindow):
         layout = QVBoxLayout()
 
         self.wg = LabeledTextEdit( CONFIG["guidelines_entry"], CONFIG["guidelines_entry_tooltip"] )
+        self.wg.set(CONFIG.get("user_prompt", USER_PROMPT_2))
+        self.system_prompt = LabeledTextEdit(
+            CONFIG["system_prompt_label"],
+            CONFIG["system_prompt_tooltip"],
+        )
+        self.system_prompt.text.setMinimumHeight(240)
+        self.system_prompt.set(CONFIG.get("system_prompt", SYSTEM_PROMPT_2))
 
         layout.addWidget(self.wg)
+        layout.addWidget(self.system_prompt)
         w.setLayout(layout)
         return w
 
@@ -943,7 +955,8 @@ class JsonIntroductionEditor(QMainWindow):
         self.contributions.set(data.get("contributions", []))
 
         # ---- Writing Guidelines ----
-        self.wg.set(data.get("writing_guidelines", ""))
+        self.wg.set(data.get("writing_guidelines", CONFIG.get("user_prompt", USER_PROMPT_2)))
+        self.system_prompt.set(data.get("system_prompt", CONFIG.get("system_prompt", SYSTEM_PROMPT_2)))
 
         # ---- Related Work: References ----
         self.references_data = data.get("related_work", {}).get("references", {})
@@ -989,7 +1002,8 @@ class JsonIntroductionEditor(QMainWindow):
                     "explicit_research_gap": self.syn_gap.get()
                 }
             },
-            "writing_guidelines": self.wg.get()
+            "writing_guidelines": self.wg.get(),
+            "system_prompt": self.system_prompt.get()
         }
         
         return data
@@ -1028,7 +1042,10 @@ class JsonIntroductionEditor(QMainWindow):
                 return any(has_content(v) for v in value.values())
             return False
 
-        return not has_content(data)
+        data_without_system_prompt = {
+            key: value for key, value in data.items() if key != "system_prompt"
+        }
+        return not has_content(data_without_system_prompt)
 
     def generate_cmd(self):
         data = self._obtaining_data()
@@ -1041,7 +1058,8 @@ class JsonIntroductionEditor(QMainWindow):
             )
             return
             
-        prompt = consultation_in_text2(SYSTEM_PROMPT_2, data)
+        system_prompt = data.get("system_prompt", CONFIG.get("system_prompt", SYSTEM_PROMPT_2))
+        prompt = consultation_in_text2(system_prompt, data)
         
         show_info_dialog(   prompt, 
                         title_message = CONFIG["message_prompt"], 
@@ -1138,4 +1156,3 @@ def main():
     
 if __name__ == "__main__":
     main()
-
