@@ -97,9 +97,15 @@ DEFAULT_CONTENT={
     "related_references_relevance": "Relevance to Our Work", 
     "related_references_relevance_tooltip": "How this work relates to and differs from our paper.",
     "related_references_role": "Introduction Paragraph Role", 
-    "related_references_role_tooltip": "foundational, early_state_of_art, recent_advances, etc.",
+    "related_references_role_tooltip": "Select a role to assign it to the current reference. Double-click a role to edit its title and description; its description guides paragraph generation.",
     "related_references_add": "Add Reference",
     "related_references_remove": "Remove Reference",
+    "paragraph_role_add": "Add Role",
+    "paragraph_role_edit": "Edit Role",
+    "paragraph_role_remove": "Remove Role",
+    "paragraph_role_dialog_title": "Paragraph Role",
+    "paragraph_role_title_label": "Short title",
+    "paragraph_role_description_label": "Long description",
     "related_references_invalid_key": "Invalid name",
     "related_references_invalid_key_tip": "Reference key cannot be empty.",
     "related_references_duplicate_key": "Duplicate key",
@@ -301,6 +307,30 @@ class LabeledLineEdit(QWidget):
         self.line.setText(value or "")
 
 
+class LabeledComboBox(QWidget):
+    def __init__(self, label, tooltip=""):
+        super().__init__()
+        layout = QHBoxLayout()
+        self.label = QLabel(label)
+        self.combo = QComboBox()
+        self.combo.setToolTip(tooltip)
+        layout.addWidget(self.label, 1)
+        layout.addWidget(self.combo, 4)
+        self.setLayout(layout)
+
+    def get(self):
+        return self.combo.currentText().strip()
+
+    def set(self, value):
+        index = self.combo.findText(value or "")
+        self.combo.setCurrentIndex(index)
+
+    def set_options(self, options, selected=""):
+        self.combo.clear()
+        self.combo.addItems(options)
+        self.set(selected)
+
+
 class StringListEditor(QWidget):
     def __init__(self, label, tooltip=""):
         super().__init__()
@@ -416,6 +446,7 @@ class JsonIntroductionEditor(QMainWindow):
         self.current_path = None
 
         self.references_data = {}
+        self.paragraph_roles = {}
         
         self.current_reference_key = None
 
@@ -694,14 +725,38 @@ class JsonIntroductionEditor(QMainWindow):
         # ---- Lista de referências + painel de edição ----
         content_layout = QHBoxLayout()
 
-        # Lista de referências
+        # Reference list and paragraph-role list
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
+
+        left_layout.addWidget(QLabel(CONFIG["related_references"]))
         self.ref_list = QListWidget()
         self.ref_list.setEditTriggers(
             QListWidget.DoubleClicked | QListWidget.EditKeyPressed
         )
         self.ref_list.itemChanged.connect(self._on_reference_renamed)
         self.ref_list.currentItemChanged.connect(self._load_reference)
-        content_layout.addWidget(self.ref_list, 1)
+        left_layout.addWidget(self.ref_list, 3)
+
+        left_layout.addWidget(QLabel(CONFIG["related_references_role"]))
+        self.paragraph_role_list = QListWidget()
+        self.paragraph_role_list.setToolTip(CONFIG["related_references_role_tooltip"])
+        self.paragraph_role_list.itemDoubleClicked.connect(self._edit_paragraph_role)
+        left_layout.addWidget(self.paragraph_role_list, 2)
+
+        role_buttons = QHBoxLayout()
+        add_role = QPushButton(CONFIG["paragraph_role_add"])
+        edit_role = QPushButton(CONFIG["paragraph_role_edit"])
+        remove_role = QPushButton(CONFIG["paragraph_role_remove"])
+        role_buttons.addWidget(add_role)
+        role_buttons.addWidget(edit_role)
+        role_buttons.addWidget(remove_role)
+        add_role.clicked.connect(self._add_paragraph_role)
+        edit_role.clicked.connect(self._edit_paragraph_role)
+        remove_role.clicked.connect(self._remove_paragraph_role)
+        left_layout.addLayout(role_buttons)
+
+        content_layout.addWidget(left_widget, 1)
 
         # Painel de edição (scrollable)
         right_widget = QWidget()
@@ -721,9 +776,10 @@ class JsonIntroductionEditor(QMainWindow):
                                                 CONFIG["related_references_limitations_tooltip"] )
         self.ref_relevance = LabeledTextEdit(   CONFIG["related_references_relevance"], 
                                                 CONFIG["related_references_relevance_tooltip"] )
-        self.ref_role = LabeledLineEdit(CONFIG["related_references_role"], 
-                                        CONFIG["related_references_role_tooltip"] )
-
+        self.ref_role = LabeledComboBox(
+            CONFIG["related_references_role"],
+            CONFIG["related_references_role_tooltip"],
+        )
         for wdg in [
             self.ref_bibtex, self.ref_abstract, self.ref_category,
             self.ref_contribution, self.ref_strengths,
@@ -792,6 +848,132 @@ class JsonIntroductionEditor(QMainWindow):
 
         self.references_data[new_key] = self.references_data.pop(old_key)
         self.current_reference_key = new_key
+
+
+    def _paragraph_role_dialog(self, title="", description=""):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(CONFIG["paragraph_role_dialog_title"])
+        layout = QVBoxLayout(dialog)
+
+        layout.addWidget(QLabel(CONFIG["paragraph_role_title_label"]))
+        title_edit = QLineEdit(title)
+        layout.addWidget(title_edit)
+
+        layout.addWidget(QLabel(CONFIG["paragraph_role_description_label"]))
+        description_edit = QTextEdit()
+        description_edit.setMinimumHeight(160)
+        description_edit.setPlainText(description or "")
+        layout.addWidget(description_edit)
+
+        buttons = QHBoxLayout()
+        save_button = QPushButton(CONFIG["message_dialog_ok"])
+        cancel_button = QPushButton("Cancel")
+        save_button.clicked.connect(dialog.accept)
+        cancel_button.clicked.connect(dialog.reject)
+        buttons.addWidget(save_button)
+        buttons.addWidget(cancel_button)
+        layout.addLayout(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return None
+        return title_edit.text().strip(), description_edit.toPlainText().strip()
+
+
+    def _selected_paragraph_role(self):
+        return self.ref_role.get()
+
+
+    def _refresh_paragraph_roles(self, selected_role=None, selected_reference_role=None):
+        if selected_role is None:
+            item = self.paragraph_role_list.currentItem()
+            selected_role = item.text() if item else ""
+        if selected_reference_role is None:
+            selected_reference_role = self._selected_paragraph_role()
+
+        self.paragraph_role_list.blockSignals(True)
+        self.paragraph_role_list.clear()
+        for title, description in self.paragraph_roles.items():
+            item = QListWidgetItem(title)
+            item.setToolTip(description or title)
+            self.paragraph_role_list.addItem(item)
+            if title == selected_role:
+                self.paragraph_role_list.setCurrentItem(item)
+        self.paragraph_role_list.blockSignals(False)
+        self.ref_role.set_options(list(self.paragraph_roles.keys()), selected_reference_role)
+
+
+    def _add_paragraph_role(self):
+        result = self._paragraph_role_dialog()
+        if result is None:
+            return
+        title, description = result
+        if not title:
+            QMessageBox.warning(self, "Invalid role", "The role title cannot be empty.")
+            return
+        if title in self.paragraph_roles:
+            QMessageBox.warning(self, "Duplicate role", "A role with this title already exists.")
+            return
+
+        selected_role = self.paragraph_role_list.currentItem().text() if self.paragraph_role_list.currentItem() else ""
+        self.paragraph_roles[title] = description
+        self._refresh_paragraph_roles(selected_role=selected_role)
+
+
+    def _edit_paragraph_role(self, item=None):
+        item = item or self.paragraph_role_list.currentItem()
+        if not item:
+            return
+        old_title = item.text()
+        result = self._paragraph_role_dialog(old_title, self.paragraph_roles.get(old_title, ""))
+        if result is None:
+            return
+        new_title, description = result
+        if not new_title:
+            QMessageBox.warning(self, "Invalid role", "The role title cannot be empty.")
+            return
+        if new_title != old_title and new_title in self.paragraph_roles:
+            QMessageBox.warning(self, "Duplicate role", "A role with this title already exists.")
+            return
+
+        self._save_current_reference()
+        updated_roles = {}
+        for title, old_description in self.paragraph_roles.items():
+            if title == old_title:
+                updated_roles[new_title] = description
+            else:
+                updated_roles[title] = old_description
+        self.paragraph_roles = updated_roles
+
+        for reference in self.references_data.values():
+            if reference.get("introduction_paragraph_role") == old_title:
+                reference["introduction_paragraph_role"] = new_title
+
+        selected_reference_role = self._selected_paragraph_role()
+        if selected_reference_role == old_title:
+            selected_reference_role = new_title
+        self._refresh_paragraph_roles(
+            selected_role=new_title,
+            selected_reference_role=selected_reference_role,
+        )
+
+
+    def _remove_paragraph_role(self):
+        item = self.paragraph_role_list.currentItem()
+        if not item:
+            return
+        title = item.text()
+        self._save_current_reference()
+        self.paragraph_roles.pop(title, None)
+        for reference in self.references_data.values():
+            if reference.get("introduction_paragraph_role") == title:
+                reference["introduction_paragraph_role"] = ""
+        selected_reference_role = self._selected_paragraph_role()
+        if selected_reference_role == title:
+            selected_reference_role = ""
+        self._refresh_paragraph_roles(
+            selected_role="",
+            selected_reference_role=selected_reference_role,
+        )
 
 
     def _synthesis_tab(self):
@@ -892,7 +1074,7 @@ class JsonIntroductionEditor(QMainWindow):
             "author_reported_strengths": self.ref_strengths.get(),
             "reported_limitations": self.ref_limitations.get(),
             "relevance_to_our_work": self.ref_relevance.get(),
-            "introduction_paragraph_role": self.ref_role.get(),
+            "introduction_paragraph_role": self._selected_paragraph_role(),
         }
 
 
@@ -916,7 +1098,7 @@ class JsonIntroductionEditor(QMainWindow):
         self.ref_strengths.set(ref.get("author_reported_strengths", []))
         self.ref_limitations.set(ref.get("reported_limitations", []))
         self.ref_relevance.set(ref.get("relevance_to_our_work"))
-        self.ref_role.set(ref.get("introduction_paragraph_role"))
+        self.ref_role.set(ref.get("introduction_paragraph_role", ""))
 
         self.ref_list.blockSignals(False)
 
@@ -958,14 +1140,31 @@ class JsonIntroductionEditor(QMainWindow):
         self.wg.set(data.get("writing_guidelines", CONFIG.get("user_prompt", USER_PROMPT_2)))
         self.system_prompt.set(data.get("system_prompt", CONFIG.get("system_prompt", SYSTEM_PROMPT_2)))
 
-        # ---- Related Work: References ----
-        self.references_data = data.get("related_work", {}).get("references", {})
+        # ---- Related Work: References and paragraph roles ----
+        related_work_data = data.get("related_work", {})
+        self.references_data = related_work_data.get("references", {})
+        loaded_roles = related_work_data.get("paragraph_roles", {})
+        self.paragraph_roles = {
+            str(title): str(description or "")
+            for title, description in loaded_roles.items()
+        } if isinstance(loaded_roles, dict) else {}
+        # Preserve roles from older project files that did not store descriptions.
+        for reference in self.references_data.values():
+            title = str(reference.get("introduction_paragraph_role", "")).strip()
+            if title and title not in self.paragraph_roles:
+                self.paragraph_roles[title] = ""
+
+        self.current_reference_key = None
+        self.ref_list.blockSignals(True)
         self.ref_list.clear()
 
         for key in self.references_data.keys():
             item = QListWidgetItem(key)
             item.setFlags(item.flags() | Qt.ItemIsEditable)
             self.ref_list.addItem(item)
+        self.ref_list.blockSignals(False)
+
+        self._refresh_paragraph_roles(selected_role="", selected_reference_role="")
 
         if self.ref_list.count() > 0:
             self.ref_list.setCurrentRow(0)
@@ -996,6 +1195,7 @@ class JsonIntroductionEditor(QMainWindow):
             "contributions": self.contributions.get(),
             "related_work": {
                 "references": self.references_data,
+                "paragraph_roles": self.paragraph_roles,
                 "human_curated_synthesis": {
                     "common_trends": self.syn_trends.get(),
                     "open_problems": self.syn_open.get(),
@@ -1045,6 +1245,12 @@ class JsonIntroductionEditor(QMainWindow):
         data_without_system_prompt = {
             key: value for key, value in data.items() if key != "system_prompt"
         }
+        related_work = data_without_system_prompt.get("related_work")
+        if isinstance(related_work, dict):
+            data_without_system_prompt["related_work"] = {
+                key: value for key, value in related_work.items()
+                if key != "paragraph_roles"
+            }
         return not has_content(data_without_system_prompt)
 
     def generate_cmd(self):

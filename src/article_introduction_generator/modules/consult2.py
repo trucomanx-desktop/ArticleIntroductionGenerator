@@ -134,6 +134,7 @@ def generate_llm_relatedworks_commands(data):
     """Return Related Work steps and matching LaTeX-comment paragraph titles."""
     related_work = data.get("related_work", {})
     references = related_work.get("references", {})
+    paragraph_roles = related_work.get("paragraph_roles", {})
     synthesis = related_work.get("human_curated_synthesis", {})
 
     role_groups = {
@@ -147,6 +148,7 @@ def generate_llm_relatedworks_commands(data):
 
     for role_value in sorted(role_groups, key=str.casefold):
         role_label = role_value.replace("_", " ").strip().title()
+        role_description = paragraph_roles.get(role_value, "")
         matching = [
             (key, ref) for key, ref in references.items()
             if str(ref.get("introduction_paragraph_role", "")).strip() == role_value
@@ -167,10 +169,12 @@ def generate_llm_relatedworks_commands(data):
                 "Assigned literature role": ref.get("introduction_paragraph_role"),
             }))
         commands.append(_step(
-            f"Write one Related Work paragraph discussing the supplied {role_label.lower()}. Compare and connect the works around their technical ideas rather than writing a sequence of disconnected summaries. Cite each discussed work using a valid LaTeX \\cite{{key}} command whose key appears in that work's BibTeX entry. Do not invent citation keys or claims. Return exactly one paragraph, with no heading.",
-            [(f"{role_label} references", ref_fields)],
+            f"Write one Related Work paragraph for the paragraph role '{role_value}'. Use its description as the main guide for what this paragraph should cover. Compare and connect the works around their technical ideas rather than writing a sequence of disconnected summaries. Cite each discussed work using a valid LaTeX \\cite{{key}} command whose key appears in that work's BibTeX entry. Do not invent citation keys or claims. Return exactly one paragraph, with no heading.",
+            [("Paragraph role title", role_value),
+             ("Paragraph role description", role_description),
+             (f"{role_label} references", ref_fields)],
         ))
-        titles.append(role_label)
+        titles.append(role_value)
 
     other_refs = [(key, ref) for key, ref in references.items() if key not in included_keys]
     if other_refs:
@@ -202,6 +206,16 @@ def generate_llm_relatedworks_commands(data):
         titles.append("Critical synthesis and research gap")
 
     return commands, titles
+
+
+def generate_bibtex_entries(data):
+    """Return the non-empty BibTeX entries from all related-work references."""
+    references = data.get("related_work", {}).get("references", {})
+    return [
+        reference["bibtex"]
+        for reference in references.values()
+        if isinstance(reference, dict) and reference.get("bibtex")
+    ]
 
 
 def consultation_step(system_prompt, system_data, initial_context, input_list, titles, contexto_acumulado):
@@ -242,6 +256,14 @@ def consultation_in_depth2(system_prompt, system_data, data):
     input_list_2, titles_2 = generate_llm_relatedworks_commands(data)
     contexto_acumulado+= "\n\\section{Related works}\n"
     contexto_acumulado = consultation_step(system_prompt, system_data, initial_context, input_list_2, titles_2, contexto_acumulado)
+
+    contexto_acumulado += "\n\n"
+    contexto_acumulado += "\\section{References}\n"
+    contexto_acumulado += "\n\n"
+
+    bib_list = generate_bibtex_entries(data)
+    
+    contexto_acumulado += "\n\n".join(bib_list) 
 
     return contexto_acumulado
 
@@ -285,5 +307,15 @@ def consultation_in_text2(system_prompt, data):
         msg += "DATA:\n"
         msg += step_data + "\n"
         msg += "```\n"
+
+    ####################
+    
+    msg += "\n\n"
+    msg += "\\section{References}\n"
+    msg += "\n\n"
+
+    bib_list = generate_bibtex_entries(data)
+    
+    msg += "\n\n".join(bib_list) 
     
     return msg
