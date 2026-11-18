@@ -8,12 +8,21 @@ Program to generate a prose-style introductory text from a structured JSON file.
 
 To install the package from [PyPI](https://pypi.org/project/article_introduction_generator/), follow the instructions below:
 
+### With pip
 
 ```bash
 pip install --upgrade article_introduction_generator
 ```
 
 Execute `which article-introduction-generator` to see where it was installed, probably in `/home/USERNAME/.local/bin/article-introduction-generator`.
+
+### With pipx (recommended for desktop applications)
+
+```bash
+pipx install article_introduction_generator
+```
+
+If you need to upgrade later: `pipx upgrade article_introduction_generator`
 
 ### Using
 
