@@ -20,9 +20,8 @@ import article_introduction_generator.about as about
 import article_introduction_generator.modules.configure as configure 
 from   article_introduction_generator.modules.resources import resource_path
 from   article_introduction_generator.modules.wabout    import show_about_window
-from   article_introduction_generator.desktop import create_desktop_file, create_desktop_directory, create_desktop_menu
-
-from article_introduction_generator.modules.consult import consultation_in_depth, consultation_in_text
+from   article_introduction_generator.desktop           import create_desktop_file, create_desktop_directory, create_desktop_menu
+from   article_introduction_generator.modules.consult2  import consultation_in_depth2, consultation_in_text2, SYSTEM_PROMPT_2
 
 # ---------- Path to config file ----------
 CONFIG_PATH = os.path.join( os.path.expanduser("~"),
@@ -134,7 +133,8 @@ DEFAULT_CONTENT={
     "list_editor_remove": "Remove",
     "list_editor_remove_tooltip": "Remove an element to the list",
     "window_width": 1024,
-    "window_height": 800
+    "window_height": 800,
+    "system_prompt": SYSTEM_PROMPT_2
 }
 
 configure.verify_default_config(CONFIG_PATH,default_content=DEFAULT_CONTENT)
@@ -171,7 +171,7 @@ class ConsultationWorker(QObject):
 
     def run(self):
         try:
-            result = consultation_in_depth(self.config, self.data)
+            result = consultation_in_depth2(SYSTEM_PROMPT_2, self.config, self.data)
             self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))
@@ -1041,7 +1041,7 @@ class JsonIntroductionEditor(QMainWindow):
             )
             return
             
-        prompt = consultation_in_text(data)
+        prompt = consultation_in_text2(SYSTEM_PROMPT_2, data)
         
         show_info_dialog(   prompt, 
                         title_message = CONFIG["message_prompt"], 

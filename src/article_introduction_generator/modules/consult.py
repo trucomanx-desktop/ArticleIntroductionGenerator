@@ -3,7 +3,7 @@ import json
 from deep_consultation.core import consult_with_deepchat
 
     
-SYSTEM_PROMPT = """
+SYSTEM_PROMPT_1 = """
 You are an expert scientific writer specialized in Q1 Computer Science journals
 (e.g., IEEE TPAMI, CVPR, ICCV, NeurIPS, Elsevier Pattern Recognition).
 
@@ -57,7 +57,7 @@ Here is the JSON input:
 
 """
 
-def consultation_in_depth(system_data, json_data):
+def consultation_in_depth(system_prompt, system_data, json_data):
 
     json_data_string = json.dumps(
         json_data,
@@ -71,10 +71,10 @@ def consultation_in_depth(system_data, json_data):
                                 system_data["api_key"],
                                 system_data["model"],
                                 msg,
-                                SYSTEM_PROMPT)
+                                system_prompt)
     return OUT
     
-def consultation_in_text(json_data):
+def consultation_in_text(system_prompt, json_data):
 
     json_data_string = json.dumps(
         json_data,
@@ -83,7 +83,7 @@ def consultation_in_text(json_data):
     )
     
     msg  = "System PROMPT:\n" 
-    msg += SYSTEM_PROMPT + "\n"
+    msg += system_prompt + "\n"
     msg += "User PROMPT:\n" 
     msg += USER_PROMPT + "```json\n" + json_data_string + "\n```"
     
