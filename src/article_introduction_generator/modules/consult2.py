@@ -218,7 +218,17 @@ def generate_bibtex_entries(data):
     ]
 
 
-def consultation_step(system_prompt, system_data, initial_context, input_list, titles, contexto_acumulado):
+def consultation_step(
+    system_prompt,
+    system_data,
+    initial_context,
+    input_list,
+    titles,
+    contexto_acumulado,
+    progress_callback=None,
+    progress_offset=0,
+    progress_total=None,
+):
     for i, (prompt, data) in enumerate(input_list):
         input_step = (
             f"{initial_context}\n"
@@ -240,22 +250,35 @@ def consultation_step(system_prompt, system_data, initial_context, input_list, t
         # Acumula o texto para servir de contexto para o próximo
         
         contexto_acumulado += paragrafo
+        if progress_callback:
+            total = progress_total if progress_total is not None else progress_offset + len(input_list)
+            progress_callback(progress_offset + i + 1, total)
 
     return contexto_acumulado
 
-def consultation_in_depth2(system_prompt, system_data, data):
+def consultation_in_depth2(system_prompt, system_data, data, progress_callback=None):
     
     initial_context = generate_initial_context(data)
     contexto_acumulado = ""
 
 
     input_list_1, titles_1 = generate_llm_introduction_commands(data) 
-    contexto_acumulado+= "\n\\section{Introduction}\n"
-    contexto_acumulado = consultation_step(system_prompt, system_data, initial_context, input_list_1, titles_1, contexto_acumulado)
-
     input_list_2, titles_2 = generate_llm_relatedworks_commands(data)
+    progress_total = len(input_list_1) + len(input_list_2)
+    if progress_callback:
+        progress_callback(0, progress_total)
+
+    contexto_acumulado+= "\n\\section{Introduction}\n"
+    contexto_acumulado = consultation_step(
+        system_prompt, system_data, initial_context, input_list_1, titles_1,
+        contexto_acumulado, progress_callback, 0, progress_total,
+    )
+
     contexto_acumulado+= "\n\\section{Related works}\n"
-    contexto_acumulado = consultation_step(system_prompt, system_data, initial_context, input_list_2, titles_2, contexto_acumulado)
+    contexto_acumulado = consultation_step(
+        system_prompt, system_data, initial_context, input_list_2, titles_2,
+        contexto_acumulado, progress_callback, len(input_list_1), progress_total,
+    )
 
     contexto_acumulado += "\n\n"
     contexto_acumulado += "\\section{References}\n"

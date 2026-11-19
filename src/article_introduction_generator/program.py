@@ -9,7 +9,8 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QTextEdit, QLineEdit, QPushButton, QFileDialog, QFrame, 
     QTabWidget, QListWidget, QMessageBox, QStatusBar, QToolBar,
-    QComboBox, QScrollArea, QListWidgetItem, QSizePolicy, QAction, QDialog
+    QComboBox, QScrollArea, QListWidgetItem, QSizePolicy, QAction, QDialog,
+    QProgressBar
 )
 
 from PyQt5.QtGui  import QIcon, QDesktopServices
@@ -172,6 +173,7 @@ CONFIG_LLM = configure.load_config(CONFIG_LLM_PATH)
 class ConsultationWorker(QObject):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
+    progress = pyqtSignal(int, int)
 
     def __init__(self, config, data):
         super().__init__()
@@ -181,7 +183,12 @@ class ConsultationWorker(QObject):
     def run(self):
         try:
             system_prompt = self.data.get("system_prompt", CONFIG["system_prompt"])
-            result = consultation_in_depth2(system_prompt, self.config, self.data)
+            result = consultation_in_depth2(
+                system_prompt,
+                self.config,
+                self.data,
+                progress_callback=self.progress.emit,
+            )
             self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))
@@ -623,6 +630,13 @@ class JsonIntroductionEditor(QMainWindow):
     def _create_status_bar(self):
         self.status = QStatusBar()
         self.setStatusBar(self.status)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedWidth(220)
+        self.progress_bar.setRange(0, 1)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("Generating paragraphs")
+        self.progress_bar.hide()
+        self.status.addPermanentWidget(self.progress_bar)
 
     def _wrap_scroll(self, widget):
         scroll = QScrollArea()
@@ -1309,20 +1323,34 @@ class JsonIntroductionEditor(QMainWindow):
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(self.on_intro_ready)
         self.worker.error.connect(self.on_intro_error)
+        self.worker.progress.connect(self.on_intro_progress)
 
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.error.connect(self.thread.quit)
+        self.worker.error.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
 
+        self.progress_bar.setRange(0, 1)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("Generating paragraphs")
+        self.progress_bar.show()
         self.thread.start()
+
+    def on_intro_progress(self, completed, total):
+        self.progress_bar.setRange(0, max(total, 1))
+        self.progress_bar.setValue(completed)
+        self.progress_bar.setFormat(f"Generating paragraphs: {completed}/{total}")
 
     def on_intro_ready(self, out):
         self.generate_intro_action.setEnabled(True)
+        self.progress_bar.hide()
         self.status.showMessage(CONFIG["message_done"])
         show_info_dialog(out, title_message=CONFIG["message_llm_response"]+": ")
 
     def on_intro_error(self, error_msg):
         self.generate_intro_action.setEnabled(True)
+        self.progress_bar.hide()
         self.status.showMessage(CONFIG["message_error"])
         show_error_dialog(error_msg)
 

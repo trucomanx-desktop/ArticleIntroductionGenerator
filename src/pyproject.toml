@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "article_introduction_generator"
-version = "0.1.7"
+version = "0.1.8"
 description = "Program to generate a prose-style introductory text from a structured JSON file."
 readme = "README.md"
 authors = [{name = "Fernando Pujaico Rivera", email = "fernando.pujaico.rivera@gmail.com"}]
